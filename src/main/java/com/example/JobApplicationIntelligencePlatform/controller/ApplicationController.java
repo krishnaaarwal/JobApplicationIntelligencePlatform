@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,5 +38,23 @@ public class ApplicationController {
     @GetMapping("/{id}")
     public ResponseEntity<Application> getStatus(@PathVariable UUID id) {
         return ResponseEntity.ok(repository.findById(id).orElseThrow());
+    }
+
+    @GetMapping("/{id}/similar")
+    public ResponseEntity<List<Application>> getSimilarJobs(@PathVariable UUID id) {
+        // 1. Fetch the target application
+        Application targetApp = repository.findById(id).orElseThrow();
+
+        if (targetApp.getJdEmbedding() == null) {
+            return ResponseEntity.badRequest().build(); // Not analyzed yet
+        }
+
+        // 2. Pass the vector as a Postgres-readable string format
+        String vectorString = targetApp.getJdEmbedding().toString();
+
+        // 3. Execute the cosine similarity search
+        List<Application> similarApps = repository.findSimilarApplications(id, vectorString);
+
+        return ResponseEntity.ok(similarApps);
     }
 }

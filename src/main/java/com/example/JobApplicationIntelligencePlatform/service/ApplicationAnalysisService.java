@@ -4,11 +4,13 @@ import com.example.JobApplicationIntelligencePlatform.entity.Application;
 import com.example.JobApplicationIntelligencePlatform.entity.JdAnalysis;
 import com.example.JobApplicationIntelligencePlatform.repository.ApplicationRepository;
 import com.example.JobApplicationIntelligencePlatform.types.AnalysisStatus;
+import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class ApplicationAnalysisService {
     private final ApplicationRepository applicationRepository;
     private final ChatClient chatClient;
+    private final EmbeddingModel embeddingModel;
 
     @Async
     public void analyzeJobDescription(UUID applicationId) {
@@ -47,6 +50,13 @@ public class ApplicationAnalysisService {
 
             JdAnalysis analysis = outputConverter.convert(response);
 
+            String textToEmbed = String.join(", ", analysis.coreRequirements()) +
+                    " " +
+                    String.join(", ", analysis.techStack());
+
+            float[] vector = embeddingModel.embed(textToEmbed);
+
+            application.setJdEmbedding(new PGvector(vector));
             application.setExtractedData(analysis);
             application.setStatus(AnalysisStatus.COMPLETED);
             applicationRepository.save(application);
