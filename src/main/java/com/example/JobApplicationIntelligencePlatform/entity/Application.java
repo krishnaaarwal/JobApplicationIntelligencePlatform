@@ -1,6 +1,7 @@
 package com.example.JobApplicationIntelligencePlatform.entity;
 
 import com.example.JobApplicationIntelligencePlatform.types.AnalysisStatus;
+import com.pgvector.PGvector;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -27,4 +28,7 @@ public class Application {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private JdAnalysis extractedData;
+
+    @Column(columnDefinition = "vector(1536)")
+    private PGvector jdEmbedding;
 }
