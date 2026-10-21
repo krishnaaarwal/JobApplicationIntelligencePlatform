@@ -13,6 +13,7 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.util.UUID;
 
@@ -65,6 +66,36 @@ public class ApplicationAnalysisService {
             application.setStatus(AnalysisStatus.FAILED);
             applicationRepository.save(application);
         }
+    }
+
+    public Flux<String> generateInterviewPrepStream(UUID applicationId, String userSkills) {
+        Application app = applicationRepository.findById(applicationId).orElseThrow();
+
+        if (app.getExtractedData() == null) {
+            throw new IllegalStateException("Job description has not been analyzed yet.");
+        }
+
+        String promptText = """
+            You are an expert technical interviewer.
+            
+            Job Requirements:
+            {requirements}
+            
+            Candidate's Current Skills:
+            {skills}
+            
+            Task: Compare the candidate's skills against the job requirements. 
+            Identify the gaps (what the candidate is missing), and generate 3 tough 
+            technical interview questions specifically targeting those weak areas.
+            """;
+
+        PromptTemplate promptTemplate = new PromptTemplate(promptText);
+        promptTemplate.add("requirements", String.join(", ", app.getExtractedData().coreRequirements()));
+        promptTemplate.add("skills", userSkills);
+
+        return chatClient.prompt(promptTemplate.create())
+                .stream()
+                .content();
     }
 
 }
