@@ -29,6 +29,6 @@ public class Application {
     @Column(columnDefinition = "jsonb")
     private JdAnalysis extractedData;
 
-    @Column(columnDefinition = "vector(1536)")
+    @Column(columnDefinition = "vector(768)")
     private PGvector jdEmbedding;
 }
