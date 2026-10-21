@@ -5,7 +5,6 @@ import com.example.JobApplicationIntelligencePlatform.entity.JdAnalysis;
 import com.example.JobApplicationIntelligencePlatform.repository.ApplicationRepository;
 import com.example.JobApplicationIntelligencePlatform.types.AnalysisStatus;
 import com.pgvector.PGvector;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -19,11 +18,19 @@ import java.util.UUID;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class ApplicationAnalysisService {
     private final ApplicationRepository applicationRepository;
     private final ChatClient chatClient;
     private final EmbeddingModel embeddingModel;
+
+    // manual constructor to build the ChatClient
+    public ApplicationAnalysisService(ApplicationRepository applicationRepository,
+                                      ChatClient.Builder chatClientBuilder,
+                                      EmbeddingModel embeddingModel) {
+        this.applicationRepository = applicationRepository;
+        this.chatClient = chatClientBuilder.build();
+        this.embeddingModel = embeddingModel;
+    }
 
     @Async
     public void analyzeJobDescription(UUID applicationId) {
