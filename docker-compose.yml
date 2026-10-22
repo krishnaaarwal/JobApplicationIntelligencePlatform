@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: job-platform-redis
+    ports:
+      - "6385:6379"
   postgres:
     image: pgvector/pgvector:pg17
     container_name: job-platform-postgres
