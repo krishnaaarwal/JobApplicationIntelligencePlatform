@@ -4,7 +4,6 @@ import com.example.JobApplicationIntelligencePlatform.entity.Application;
 import com.example.JobApplicationIntelligencePlatform.entity.JdAnalysis;
 import com.example.JobApplicationIntelligencePlatform.repository.ApplicationRepository;
 import com.example.JobApplicationIntelligencePlatform.types.AnalysisStatus;
-import com.pgvector.PGvector;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -64,7 +63,7 @@ public class ApplicationAnalysisService {
 
             float[] vector = embeddingModel.embed(textToEmbed);
 
-            application.setJdEmbedding(new PGvector(vector));
+            application.setJdEmbedding(vector);
             application.setExtractedData(analysis);
             application.setStatus(AnalysisStatus.COMPLETED);
             applicationRepository.save(application);
