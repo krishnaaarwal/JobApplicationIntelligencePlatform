@@ -28,7 +28,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyString;
 
-@SpringBootTest(properties = "spring.ai.google.genai.api-key=test")
+@SpringBootTest(properties = {
+		"spring.ai.google.genai.api-key=test",
+		"spring.jpa.hibernate.ddl-auto=create-drop"
+})
 @Testcontainers
 class ApplicationAnalysisServiceTest {
 
