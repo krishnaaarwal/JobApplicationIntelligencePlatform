@@ -24,4 +24,12 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
             @Param("targetId") UUID targetId,
             @Param("embeddingStr") String embeddingStr
     );
+
+    // Returns a match score between 0.0 (no match) and 1.0 (perfect match)
+    // 1 - cosine_distance = cosine_similarity
+    @Query(value = """
+        SELECT (1 - (jd_embedding <=> cast(:userVector as vector))) AS match_score 
+        FROM applications WHERE id = :applicationId
+        """, nativeQuery = true)
+    Double calculateMatchScore(@Param("applicationId") UUID applicationId, @Param("userVector") String userVector);
 }

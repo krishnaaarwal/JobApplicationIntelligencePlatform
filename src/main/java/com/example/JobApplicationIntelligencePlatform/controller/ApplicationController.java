@@ -66,4 +66,16 @@ public class ApplicationController {
 
         return analysisService.generateInterviewPrepStream(id, skills);
     }
+    
+    @GetMapping("/{id}/match")
+    public ResponseEntity<Map<String, Double>> getMatchScore(@PathVariable UUID id, @RequestParam String skills) {
+        Application app = repository.findById(id).orElseThrow();
+        if (app.getJdEmbedding() == null) return ResponseEntity.badRequest().build();
+
+        // Generate embedding for the user's skills
+        float[] userVector = analysisService.getEmbeddingModel().embed(skills);
+
+        Double score = repository.calculateMatchScore(id, Arrays.toString(userVector));
+        return ResponseEntity.ok(Map.of("matchPercentage", Math.round(score * 100.0) / 100.0));
+    }
 }

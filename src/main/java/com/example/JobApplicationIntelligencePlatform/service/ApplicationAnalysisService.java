@@ -4,19 +4,22 @@ import com.example.JobApplicationIntelligencePlatform.entity.Application;
 import com.example.JobApplicationIntelligencePlatform.entity.JdAnalysis;
 import com.example.JobApplicationIntelligencePlatform.repository.ApplicationRepository;
 import com.example.JobApplicationIntelligencePlatform.types.AnalysisStatus;
-import tools.jackson.databind.ObjectMapper;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import tools.jackson.databind.ObjectMapper;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.UUID;
 
 @Service
@@ -26,13 +29,13 @@ public class ApplicationAnalysisService {
     private final ApplicationRepository applicationRepository;
     private final ChatClient chatClient;
     private final EmbeddingModel embeddingModel;
-    private final RedisTemplate<String, String> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
     public ApplicationAnalysisService(ApplicationRepository applicationRepository,
                                       ChatClient.Builder chatClientBuilder,
                                       EmbeddingModel embeddingModel,
-                                      RedisTemplate<String, String> redisTemplate,
+                                      StringRedisTemplate redisTemplate,
                                       ObjectMapper objectMapper) {
         this.applicationRepository = applicationRepository;
         this.chatClient = chatClientBuilder.build();
@@ -46,11 +49,17 @@ public class ApplicationAnalysisService {
         Application app = applicationRepository.findById(applicationId).orElseThrow();
 
         try {
-            // 1. Normalize and Hash the JD for Redis Cache
-            String normalizedJd = app.getRawJd().toLowerCase().replaceAll("[^a-z0-9]", "");
+            // 1. Normalize (Unicode safe) and Hash
+            String normalizedJd = app.getRawJd().replaceAll("[^\\p{L}\\p{N}]", "").toLowerCase();
             String cacheKey = "jd_analysis:" + generateHash(normalizedJd);
 
-            String cachedJson = redisTemplate.opsForValue().get(cacheKey);
+            String cachedJson = null;
+            try {
+                cachedJson = redisTemplate.opsForValue().get(cacheKey);
+            } catch (Exception e) {
+                log.warn("Redis GET failed, proceeding to LLM as cache MISS", e);
+            }
+
             JdAnalysis analysis;
 
             if (cachedJson != null) {
@@ -78,22 +87,24 @@ public class ApplicationAnalysisService {
                 String response = chatClient.prompt(promptTemplate.create()).call().content();
                 analysis = outputConverter.convert(response);
 
-                // Save to Redis for 7 days
-                redisTemplate.opsForValue().set(
-                        cacheKey,
-                        objectMapper.writeValueAsString(analysis),
-                        Duration.ofDays(7)
-                );
+                try {
+                    redisTemplate.opsForValue().set(
+                            cacheKey,
+                            objectMapper.writeValueAsString(analysis),
+                            Duration.ofDays(7)
+                    );
+                } catch (Exception e) {
+                    log.warn("Redis SET failed, skipping cache storage", e);
+                }
             }
 
-            // 2. Generate the Vector Embedding
+            // 2. Generate Vector
             String textToEmbed = String.join(", ", analysis.coreRequirements()) +
-                    " " +
-                    String.join(", ", analysis.techStack());
+                    " " + String.join(", ", analysis.techStack());
 
             float[] vector = embeddingModel.embed(textToEmbed);
 
-            // 3. Update Database Record
+            // 3. Update DB
             app.setJdEmbedding(vector);
             app.setExtractedData(analysis);
             app.setStatus(AnalysisStatus.COMPLETED);
@@ -107,17 +118,17 @@ public class ApplicationAnalysisService {
         }
     }
 
-    // Helper method for SHA-256
-    private String generateHash(String input) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-        StringBuilder hexString = new StringBuilder(2 * hash.length);
-        for (byte b : hash) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
-            hexString.append(hex);
+    public Double calculateMatchScore(UUID applicationId, String userSkills) {
+        Application app = applicationRepository.findById(applicationId).orElseThrow();
+        if (app.getJdEmbedding() == null) {
+            throw new IllegalStateException("Job description has not been analyzed yet.");
         }
-        return hexString.toString();
+
+        float[] userVector = embeddingModel.embed(userSkills);
+        Double score = applicationRepository.calculateMatchScore(applicationId, Arrays.toString(userVector));
+
+        // Return rounded to 2 decimal places
+        return score != null ? Math.round(score * 100.0) / 100.0 : 0.0;
     }
 
     public Flux<String> generateInterviewPrepStream(UUID applicationId, String userSkills) {
@@ -149,4 +160,18 @@ public class ApplicationAnalysisService {
                 .stream()
                 .content();
     }
+
+    private String generateHash(String input) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hexString = new StringBuilder(2 * hash.length);
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
+
+    public EmbeddingModel getEmbeddingModel() { return this.embeddingModel; }
 }
