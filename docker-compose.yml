@@ -19,6 +19,7 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d job_platform"]
