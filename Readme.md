@@ -29,7 +29,7 @@ flowchart TD
     C[Client] -->|POST /api/applications| API[ApplicationController]
     API -->|save as PENDING| PG[(PostgreSQL + pgvector)]
     API -->|202 + applicationId| C
-    API -.->|@Async| SVC[ApplicationAnalysisService]
+    API -.->|async| SVC[ApplicationAnalysisService]
     SVC --> R{Redis lookup<br/>sha256 of normalized JD}
     R -->|hit| EMB[Gemini embedding<br/>768-dim vector]
     R -->|miss| LLM[Gemini chat<br/>BeanOutputConverter]
